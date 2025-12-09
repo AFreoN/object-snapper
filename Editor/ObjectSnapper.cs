@@ -30,6 +30,13 @@ public class ObjectSnapper
 
     static float lastTime;
 
+    // Settings
+    public static float maxRaycastDistance = 1000f;
+    public static float snapDelay = 0.05f;
+    public static float offsetDistance = 0f;
+    public static bool useLocalSpace = false;
+    public static bool showWarnings = true;
+
     static ObjectSnapper()
     {
         SceneView.duringSceneGui += OnSceneGUI;
@@ -54,7 +61,7 @@ public class ObjectSnapper
         else if(snapping)
         {
             //if(currentSelection[currentIndex].position != currentPosition[currentIndex])
-            if(Time.realtimeSinceStartup >= lastTime + .05f)
+            if(Time.realtimeSinceStartup >= lastTime + snapDelay)
             {
                 currentIndex++;
                 if(currentIndex >= currentSelection.Count)
@@ -169,30 +176,31 @@ public class ObjectSnapper
         if (AssetDatabase.Contains(transform.gameObject))
             return;
 
-        Vector3 rayDirection = enumToVector3(direction);
+        Vector3 rayDirection = useLocalSpace ? transform.TransformDirection(enumToVector3(direction)) : enumToVector3(direction);
+        Vector3 rayOrigin = transform.position;
 
-        if (Physics.Raycast(transform.position, rayDirection, out RaycastHit hit))
+        if (Physics.Raycast(rayOrigin, rayDirection, out RaycastHit hit, maxRaycastDistance))
         {
-            float boundY = 0;
-
-            float final = 0;
-
-            if (transform.GetComponent<MeshRenderer>() != null)
+            // Check if hit object has a collider (redundant but good for clarity)
+            if (hit.collider == null && showWarnings)
             {
-                boundY = transform.GetComponent<MeshRenderer>().bounds.size.y;
-
-                final = boundY * .5f;
+                Debug.LogWarning($"ObjectSnapper: No collider found on target object for {transform.name}");
+                lastTime = Time.realtimeSinceStartup;
+                return;
             }
 
-            Undo.RecordObject(transform, "Clamped Transform");
-            float yPos = (hit.point + final * Vector3.up).y;
+            Undo.RecordObject(transform, "Snap Object");
 
-            Vector3 directionalized = MultiplyVector3Segments(-1 * rayDirection, transform.position);
-            directionalized.x = rayDirection.x == 0 ? transform.position.x : hit.point.x + GetExtremeDistance(transform, direction);
-            directionalized.y = rayDirection.y == 0 ? transform.position.y : hit.point.y + GetExtremeDistance(transform, direction);
-            directionalized.z = rayDirection.z == 0 ? transform.position.z : hit.point.z + GetExtremeDistance(transform, direction);
+            Vector3 directionalized = MultiplyVector3Segments(-1 * rayDirection.normalized, transform.position);
+            directionalized.x = rayDirection.x == 0 ? transform.position.x : hit.point.x + GetExtremeDistance(transform, direction) + (offsetDistance * Mathf.Sign(rayDirection.x));
+            directionalized.y = rayDirection.y == 0 ? transform.position.y : hit.point.y + GetExtremeDistance(transform, direction) + (offsetDistance * Mathf.Sign(rayDirection.y));
+            directionalized.z = rayDirection.z == 0 ? transform.position.z : hit.point.z + GetExtremeDistance(transform, direction) + (offsetDistance * Mathf.Sign(rayDirection.z));
 
             transform.position = directionalized;
+        }
+        else if (showWarnings)
+        {
+            Debug.LogWarning($"ObjectSnapper: No object found in {direction} direction within {maxRaycastDistance} units for {transform.name}");
         }
 
         lastTime = Time.realtimeSinceStartup;
@@ -200,75 +208,33 @@ public class ObjectSnapper
 
     static float GetExtremeDistance(Transform transform, Directions direction)
     {
-        float iterator = float.MaxValue;
-        float result = 0;
+        Renderer renderer = transform.GetComponent<Renderer>();
 
-        MeshFilter meshFilter = transform.GetComponent<MeshFilter>();
-        bool haveMF = transform.GetComponent<MeshFilter>() != null ? true : false;
-        bool haveSMR = transform.GetComponent<SkinnedMeshRenderer>() != null ? true : false;
-
-        if (haveMF == false && haveSMR == false)
+        if (renderer == null)
             return 0;
 
-        Mesh m = haveMF ? transform.GetComponent<MeshFilter>().sharedMesh : transform.GetComponent<SkinnedMeshRenderer>().sharedMesh;
+        Bounds bounds = renderer.bounds;
+        float result = 0;
 
         switch(direction)
         {
             case Directions.UP:
-                iterator = float.MinValue;
-                foreach(Vector3 v in m.vertices)
-                {
-                    if (transform.TransformPoint(v).y > iterator)
-                        iterator = transform.TransformPoint(v).y;
-                }
-                result = transform.position.y - iterator;
+                result = transform.position.y - bounds.max.y;
                 break;
             case Directions.DOWN:
-                iterator = float.MaxValue;
-                foreach(Vector3 v in m.vertices)
-                {
-                    if(transform.TransformPoint(v).y < iterator)
-                    {
-                        iterator = transform.TransformPoint(v).y;
-                    }
-                }
-                result = transform.position.y - iterator;
+                result = transform.position.y - bounds.min.y;
                 break;
             case Directions.RIGHT:
-                iterator = float.MinValue;
-                foreach(Vector3 v in m.vertices)
-                {
-                    if (transform.TransformPoint(v).x > iterator)
-                        iterator = transform.TransformPoint(v).x;
-                }
-                result = transform.position.x - iterator;
+                result = transform.position.x - bounds.max.x;
                 break;
             case Directions.LEFT:
-                iterator = float.MaxValue;
-                foreach(Vector3 v in m.vertices)
-                {
-                    if (transform.TransformPoint(v).x < iterator)
-                        iterator = transform.TransformPoint(v).x;
-                }
-                result = transform.position.x - iterator;
+                result = transform.position.x - bounds.min.x;
                 break;
             case Directions.FORWARD:
-                iterator = float.MinValue;
-                foreach(Vector3 v in m.vertices)
-                {
-                    if (transform.TransformPoint(v).z > iterator)
-                        iterator = transform.TransformPoint(v).z;
-                }
-                result = transform.position.z - iterator;
+                result = transform.position.z - bounds.max.z;
                 break;
             case Directions.BACKWARD:
-                iterator = float.MaxValue;
-                foreach(Vector3 v in m.vertices)
-                {
-                    if (transform.TransformPoint(v).z < iterator)
-                        iterator = transform.TransformPoint(v).z;
-                }
-                result = transform.position.z - iterator;
+                result = transform.position.z - bounds.min.z;
                 break;
         }
 
@@ -352,6 +318,8 @@ public class ObjectSnapper
 
         //GUI.backgroundColor = new Color32(255,248,230,150);
         GUI.backgroundColor = new Color(.3f, .3f, .3f, .7f);
+
+        noSkin = false;
     }
 
     static Rect getRectScale(Rect r)
