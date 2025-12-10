@@ -36,6 +36,15 @@ public class ObjectSnapper
     public static float offsetDistance = 0f;
     public static bool useLocalSpace = false;
     public static bool showWarnings = true;
+    public static bool showPreview = true;
+    public static LayerMask snapLayerMask = ~0; // All layers by default
+    public static AlignmentMode alignmentMode = AlignmentMode.Surface;
+    public static bool enableKeyboardShortcuts = true;
+
+    // Preview data
+    static Dictionary<Transform, Vector3> previewPositions = new Dictionary<Transform, Vector3>();
+    static bool hasPreview = false;
+    static Directions previewDirection;
 
     static ObjectSnapper()
     {
@@ -57,6 +66,12 @@ public class ObjectSnapper
             Handles.BeginGUI();
             DrawGUI();
             Handles.EndGUI();
+
+            // Draw preview gizmos
+            if (showPreview && hasPreview)
+            {
+                DrawPreviewGizmos();
+            }
         }
         else if(snapping)
         {
@@ -69,6 +84,7 @@ public class ObjectSnapper
                     snapping = false;
                     //Debug.Log("Snapped " + currentIndex + " objects");
                     currentSelection.Clear();
+                    ClearPreview();
 
                     Undo.CollapseUndoOperations(undoGroupID);
                 }
@@ -88,6 +104,8 @@ public class ObjectSnapper
     static void DrawGUI()
     {
         Rect forwardRect = new Rect(startMousePosition.x - buttonWidth * .5f, startMousePosition.y - ForwardBtnDistance - buttonHeight * .5f, buttonWidth, buttonHeight);
+        bool forwardHover = IsMouseOnRect(forwardRect);
+        if(forwardHover && !hasPreview) { UpdatePreview(Directions.FORWARD); }
         if(GUI.Button(getRectScale(forwardRect), "<color=#8D9AD9>Forward</color>", style))
         {
             SnapToObject(Directions.FORWARD);
@@ -95,6 +113,8 @@ public class ObjectSnapper
         }
 
         Rect backwardRect = new Rect(startMousePosition.x - buttonWidth * .5f, startMousePosition.y + BackwardBtnDistance - buttonHeight * .5f, buttonWidth, buttonHeight);
+        bool backwardHover = IsMouseOnRect(backwardRect);
+        if(backwardHover && !hasPreview) { UpdatePreview(Directions.BACKWARD); }
         if(GUI.Button(getRectScale(backwardRect), "<color=#8D9AD9>Backward</color>", style))
         {
             SnapToObject(Directions.BACKWARD);
@@ -102,6 +122,8 @@ public class ObjectSnapper
         }
 
         Rect upRect = new Rect(startMousePosition.x - buttonWidth * .5f, startMousePosition.y - ForwardBtnDistance - UpBtnDistance - buttonHeight * .5f, buttonWidth, buttonHeight);
+        bool upHover = IsMouseOnRect(upRect);
+        if(upHover && !hasPreview) { UpdatePreview(Directions.UP); }
         if(GUI.Button(getRectScale(upRect), "<color=#FFFF00>Top</color>", style))
         {
             SnapToObject(Directions.UP);
@@ -109,6 +131,8 @@ public class ObjectSnapper
         }
 
         Rect downRect = new Rect(startMousePosition.x - buttonWidth * .5f, startMousePosition.y + BackwardBtnDistance + DownBtnDistance - buttonHeight * .5f, buttonWidth, buttonHeight);
+        bool downHover = IsMouseOnRect(downRect);
+        if(downHover && !hasPreview) { UpdatePreview(Directions.DOWN); }
         if(GUI.Button(getRectScale(downRect), "<color=#FFFF00>Down</color>", style))
         {
             SnapToObject(Directions.DOWN);
@@ -116,6 +140,8 @@ public class ObjectSnapper
         }
 
         Rect rightRect = new Rect(startMousePosition.x + RightBtnDistance - buttonWidth * .5f, startMousePosition.y - buttonHeight * .5f, buttonWidth, buttonHeight);
+        bool rightHover = IsMouseOnRect(rightRect);
+        if(rightHover && !hasPreview) { UpdatePreview(Directions.RIGHT); }
         if(GUI.Button(getRectScale(rightRect), "<color=#FF0000>Right</color>", style))
         {
             SnapToObject(Directions.RIGHT);
@@ -123,10 +149,18 @@ public class ObjectSnapper
         }
 
         Rect leftRect = new Rect(startMousePosition.x - LeftBtnDistance - buttonWidth * .5f, startMousePosition.y - buttonHeight * .5f, buttonWidth, buttonHeight);
+        bool leftHover = IsMouseOnRect(leftRect);
+        if(leftHover && !hasPreview) { UpdatePreview(Directions.LEFT); }
         if(GUI.Button(getRectScale(leftRect), "<color=#FF0000>Left</color>", style))
         {
             SnapToObject(Directions.LEFT);
             haveInput = false;
+        }
+
+        // Clear preview if not hovering any button
+        if(!forwardHover && !backwardHover && !upHover && !downHover && !rightHover && !leftHover)
+        {
+            ClearPreview();
         }
     }
 
@@ -179,7 +213,7 @@ public class ObjectSnapper
         Vector3 rayDirection = useLocalSpace ? transform.TransformDirection(enumToVector3(direction)) : enumToVector3(direction);
         Vector3 rayOrigin = transform.position;
 
-        if (Physics.Raycast(rayOrigin, rayDirection, out RaycastHit hit, maxRaycastDistance))
+        if (Physics.Raycast(rayOrigin, rayDirection, out RaycastHit hit, maxRaycastDistance, snapLayerMask))
         {
             // Check if hit object has a collider (redundant but good for clarity)
             if (hit.collider == null && showWarnings)
@@ -191,12 +225,8 @@ public class ObjectSnapper
 
             Undo.RecordObject(transform, "Snap Object");
 
-            Vector3 directionalized = MultiplyVector3Segments(-1 * rayDirection.normalized, transform.position);
-            directionalized.x = rayDirection.x == 0 ? transform.position.x : hit.point.x + GetExtremeDistance(transform, direction) + (offsetDistance * Mathf.Sign(rayDirection.x));
-            directionalized.y = rayDirection.y == 0 ? transform.position.y : hit.point.y + GetExtremeDistance(transform, direction) + (offsetDistance * Mathf.Sign(rayDirection.y));
-            directionalized.z = rayDirection.z == 0 ? transform.position.z : hit.point.z + GetExtremeDistance(transform, direction) + (offsetDistance * Mathf.Sign(rayDirection.z));
-
-            transform.position = directionalized;
+            Vector3 targetPosition = CalculateSnapPosition(transform, hit, rayDirection, direction);
+            transform.position = targetPosition;
         }
         else if (showWarnings)
         {
@@ -204,6 +234,41 @@ public class ObjectSnapper
         }
 
         lastTime = Time.realtimeSinceStartup;
+    }
+
+    static Vector3 CalculateSnapPosition(Transform transform, RaycastHit hit, Vector3 rayDirection, Directions direction)
+    {
+        Vector3 targetPosition = transform.position;
+
+        switch (alignmentMode)
+        {
+            case AlignmentMode.Surface:
+                Vector3 directionalized = MultiplyVector3Segments(-1 * rayDirection.normalized, transform.position);
+                directionalized.x = rayDirection.x == 0 ? transform.position.x : hit.point.x + GetExtremeDistance(transform, direction) + (offsetDistance * Mathf.Sign(rayDirection.x));
+                directionalized.y = rayDirection.y == 0 ? transform.position.y : hit.point.y + GetExtremeDistance(transform, direction) + (offsetDistance * Mathf.Sign(rayDirection.y));
+                directionalized.z = rayDirection.z == 0 ? transform.position.z : hit.point.z + GetExtremeDistance(transform, direction) + (offsetDistance * Mathf.Sign(rayDirection.z));
+                targetPosition = directionalized;
+                break;
+
+            case AlignmentMode.Center:
+                Renderer hitRenderer = hit.collider.GetComponent<Renderer>();
+                if (hitRenderer != null)
+                {
+                    Vector3 hitCenter = hitRenderer.bounds.center;
+                    targetPosition = hitCenter + (rayDirection.normalized * offsetDistance);
+                }
+                else
+                {
+                    targetPosition = hit.point + (rayDirection.normalized * offsetDistance);
+                }
+                break;
+
+            case AlignmentMode.Pivot:
+                targetPosition = hit.transform.position + (rayDirection.normalized * offsetDistance);
+                break;
+        }
+
+        return targetPosition;
     }
 
     static float GetExtremeDistance(Transform transform, Directions direction)
@@ -299,12 +364,58 @@ public class ObjectSnapper
                 {
                     startMousePosition = Event.current.mousePosition;
                 }
+                else
+                {
+                    ClearPreview();
+                }
+            }
+
+            // Direct keyboard shortcuts
+            if(enableKeyboardShortcuts && haveInput)
+            {
+                if(Event.current.keyCode == KeyCode.W || Event.current.keyCode == KeyCode.UpArrow)
+                {
+                    SnapToObject(Directions.FORWARD);
+                    haveInput = false;
+                    Event.current.Use();
+                }
+                else if(Event.current.keyCode == KeyCode.S || Event.current.keyCode == KeyCode.DownArrow)
+                {
+                    SnapToObject(Directions.BACKWARD);
+                    haveInput = false;
+                    Event.current.Use();
+                }
+                else if(Event.current.keyCode == KeyCode.D || Event.current.keyCode == KeyCode.RightArrow)
+                {
+                    SnapToObject(Directions.RIGHT);
+                    haveInput = false;
+                    Event.current.Use();
+                }
+                else if(Event.current.keyCode == KeyCode.A || Event.current.keyCode == KeyCode.LeftArrow)
+                {
+                    SnapToObject(Directions.LEFT);
+                    haveInput = false;
+                    Event.current.Use();
+                }
+                else if(Event.current.keyCode == KeyCode.E)
+                {
+                    SnapToObject(Directions.UP);
+                    haveInput = false;
+                    Event.current.Use();
+                }
+                else if(Event.current.keyCode == KeyCode.Q)
+                {
+                    SnapToObject(Directions.DOWN);
+                    haveInput = false;
+                    Event.current.Use();
+                }
             }
         }
 
         if(Event.current.isMouse && Event.current.type == EventType.MouseDown && Event.current.button == 1)
         {
             haveInput = false;
+            ClearPreview();
         }
     }
 
@@ -372,6 +483,94 @@ public class ObjectSnapper
         return result;
     }
 
+    static void UpdatePreview(Directions direction)
+    {
+        if (Selection.gameObjects.Length == 0 || !showPreview)
+        {
+            ClearPreview();
+            return;
+        }
+
+        previewPositions.Clear();
+        previewDirection = direction;
+
+        Object[] all = Selection.GetFiltered(typeof(Transform), SelectionMode.TopLevel);
+
+        foreach (Transform t in all)
+        {
+            if (AssetDatabase.Contains(t.gameObject))
+                continue;
+
+            Vector3 rayDirection = useLocalSpace ? t.TransformDirection(enumToVector3(direction)) : enumToVector3(direction);
+            Vector3 rayOrigin = t.position;
+
+            if (Physics.Raycast(rayOrigin, rayDirection, out RaycastHit hit, maxRaycastDistance, snapLayerMask))
+            {
+                Vector3 previewPos = CalculateSnapPosition(t, hit, rayDirection, direction);
+                previewPositions[t] = previewPos;
+            }
+        }
+
+        hasPreview = previewPositions.Count > 0;
+    }
+
+    static void ClearPreview()
+    {
+        previewPositions.Clear();
+        hasPreview = false;
+    }
+
+    static void DrawPreviewGizmos()
+    {
+        foreach (var kvp in previewPositions)
+        {
+            Transform t = kvp.Key;
+            Vector3 previewPos = kvp.Value;
+
+            if (t == null)
+                continue;
+
+            Renderer renderer = t.GetComponent<Renderer>();
+            if (renderer != null)
+            {
+                Bounds bounds = renderer.bounds;
+                Vector3 size = bounds.size;
+                Vector3 offset = previewPos - t.position;
+                Vector3 previewCenter = bounds.center + offset;
+
+                // Draw semi-transparent preview box (wireframe)
+                Handles.color = new Color(0.2f, 1f, 0.2f, 0.6f);
+                Handles.DrawWireCube(previewCenter, size);
+
+                // Draw a second slightly larger wireframe for better visibility
+                Handles.color = new Color(0.2f, 1f, 0.2f, 0.3f);
+                Handles.DrawWireCube(previewCenter, size * 1.02f);
+
+                // Draw direction arrow from current to preview position
+                Handles.color = new Color(0.2f, 1f, 0.2f, 0.8f);
+                Handles.DrawDottedLine(t.position, previewPos, 4f);
+
+                // Draw arrow at preview position
+                Vector3 arrowDirection = (previewPos - t.position).normalized;
+                if (arrowDirection != Vector3.zero)
+                {
+                    Handles.color = new Color(0.2f, 1f, 0.2f, 1f);
+                    Handles.ArrowHandleCap(0, previewPos - arrowDirection * 0.5f, Quaternion.LookRotation(arrowDirection), 0.5f, EventType.Repaint);
+                }
+
+                // Draw position label
+                GUIStyle labelStyle = new GUIStyle(EditorStyles.helpBox);
+                labelStyle.fontSize = 10;
+                labelStyle.alignment = TextAnchor.MiddleCenter;
+                labelStyle.normal.textColor = Color.white;
+
+                Handles.Label(previewPos + Vector3.up * size.y * 0.5f,
+                    $"Preview: {t.name}\n{previewDirection}",
+                    labelStyle);
+            }
+        }
+    }
+
     enum Directions
     {
         UP,
@@ -380,5 +579,12 @@ public class ObjectSnapper
         LEFT,
         FORWARD,
         BACKWARD
+    }
+
+    public enum AlignmentMode
+    {
+        Surface,
+        Center,
+        Pivot
     }
 }

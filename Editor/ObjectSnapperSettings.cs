@@ -7,11 +7,13 @@ public class ObjectSnapperSettings : EditorWindow
     public static void ShowWindow()
     {
         ObjectSnapperSettings window = GetWindow<ObjectSnapperSettings>("Snapper Settings");
-        window.minSize = new Vector2(300, 400);
+        window.minSize = new Vector2(350, 600);
         window.Show();
     }
 
     private Vector2 scrollPosition;
+    private bool showAdvanced = false;
+    private bool showKeyboardHelp = false;
 
     void OnGUI()
     {
@@ -49,6 +51,11 @@ public class ObjectSnapperSettings : EditorWindow
         EditorGUILayout.LabelField("Snapping Behavior", EditorStyles.boldLabel);
         EditorGUILayout.BeginVertical("box");
 
+        ObjectSnapper.alignmentMode = (ObjectSnapper.AlignmentMode)EditorGUILayout.EnumPopup(
+            new GUIContent("Alignment Mode", "Surface: Align to hit surface\nCenter: Align to object center\nPivot: Align to object pivot"),
+            ObjectSnapper.alignmentMode
+        );
+
         ObjectSnapper.offsetDistance = EditorGUILayout.FloatField(
             new GUIContent("Offset Distance", "Additional spacing between snapped objects. Positive values add space, negative overlaps."),
             ObjectSnapper.offsetDistance
@@ -63,9 +70,14 @@ public class ObjectSnapperSettings : EditorWindow
 
         EditorGUILayout.Space(10);
 
-        // UI Settings
-        EditorGUILayout.LabelField("UI Settings", EditorStyles.boldLabel);
+        // Visual Settings
+        EditorGUILayout.LabelField("Visual Settings", EditorStyles.boldLabel);
         EditorGUILayout.BeginVertical("box");
+
+        ObjectSnapper.showPreview = EditorGUILayout.Toggle(
+            new GUIContent("Show Preview", "Display preview gizmos when hovering over direction buttons."),
+            ObjectSnapper.showPreview
+        );
 
         ObjectSnapper.showWarnings = EditorGUILayout.Toggle(
             new GUIContent("Show Warnings", "Display console warnings when snapping fails."),
@@ -73,6 +85,56 @@ public class ObjectSnapperSettings : EditorWindow
         );
 
         EditorGUILayout.EndVertical();
+
+        EditorGUILayout.Space(10);
+
+        // Input Settings
+        EditorGUILayout.LabelField("Input Settings", EditorStyles.boldLabel);
+        EditorGUILayout.BeginVertical("box");
+
+        ObjectSnapper.enableKeyboardShortcuts = EditorGUILayout.Toggle(
+            new GUIContent("Enable Keyboard Shortcuts", "Use WASD/QE keys for quick snapping after pressing Shift+G."),
+            ObjectSnapper.enableKeyboardShortcuts
+        );
+
+        if (ObjectSnapper.enableKeyboardShortcuts)
+        {
+            showKeyboardHelp = EditorGUILayout.Foldout(showKeyboardHelp, "Keyboard Shortcuts");
+            if (showKeyboardHelp)
+            {
+                EditorGUILayout.BeginVertical("helpbox");
+                EditorGUILayout.LabelField("W / ↑ : Snap Forward", EditorStyles.miniLabel);
+                EditorGUILayout.LabelField("S / ↓ : Snap Backward", EditorStyles.miniLabel);
+                EditorGUILayout.LabelField("D / → : Snap Right", EditorStyles.miniLabel);
+                EditorGUILayout.LabelField("A / ← : Snap Left", EditorStyles.miniLabel);
+                EditorGUILayout.LabelField("E : Snap Up", EditorStyles.miniLabel);
+                EditorGUILayout.LabelField("Q : Snap Down", EditorStyles.miniLabel);
+                EditorGUILayout.EndVertical();
+            }
+        }
+
+        EditorGUILayout.EndVertical();
+
+        EditorGUILayout.Space(10);
+
+        // Advanced Settings
+        showAdvanced = EditorGUILayout.Foldout(showAdvanced, "Advanced Settings", true);
+        if (showAdvanced)
+        {
+            EditorGUILayout.BeginVertical("box");
+
+            EditorGUILayout.LabelField("Layer Filtering", EditorStyles.boldLabel);
+            ObjectSnapper.snapLayerMask = EditorGUILayout.MaskField(
+                new GUIContent("Snap Layers", "Only snap to objects on these layers."),
+                ObjectSnapper.snapLayerMask,
+                UnityEditorInternal.InternalEditorUtility.layers
+            );
+
+            EditorGUILayout.Space(5);
+            EditorGUILayout.HelpBox("Layer mask allows you to control which objects can be snapped to. Useful for ignoring UI, effects, or other non-geometry layers.", MessageType.Info);
+
+            EditorGUILayout.EndVertical();
+        }
 
         EditorGUILayout.Space(10);
 
@@ -86,6 +148,9 @@ public class ObjectSnapperSettings : EditorWindow
             ObjectSnapper.snapDelay = 0f;
             ObjectSnapper.maxRaycastDistance = 500f;
             ObjectSnapper.offsetDistance = 0f;
+            ObjectSnapper.alignmentMode = ObjectSnapper.AlignmentMode.Surface;
+            ObjectSnapper.showPreview = true;
+            ObjectSnapper.enableKeyboardShortcuts = true;
         }
 
         if (GUILayout.Button("Precise Control"))
@@ -93,6 +158,8 @@ public class ObjectSnapperSettings : EditorWindow
             ObjectSnapper.snapDelay = 0.15f;
             ObjectSnapper.maxRaycastDistance = 1000f;
             ObjectSnapper.offsetDistance = 0f;
+            ObjectSnapper.alignmentMode = ObjectSnapper.AlignmentMode.Surface;
+            ObjectSnapper.showPreview = true;
         }
         EditorGUILayout.EndHorizontal();
 
@@ -101,6 +168,23 @@ public class ObjectSnapperSettings : EditorWindow
         {
             ObjectSnapper.snapDelay = 0.05f;
             ObjectSnapper.offsetDistance = 0.1f;
+            ObjectSnapper.alignmentMode = ObjectSnapper.AlignmentMode.Surface;
+        }
+
+        if (GUILayout.Button("Center Align"))
+        {
+            ObjectSnapper.alignmentMode = ObjectSnapper.AlignmentMode.Center;
+            ObjectSnapper.offsetDistance = 0f;
+            ObjectSnapper.showPreview = true;
+        }
+        EditorGUILayout.EndHorizontal();
+
+        EditorGUILayout.BeginHorizontal();
+        if (GUILayout.Button("Pivot Align"))
+        {
+            ObjectSnapper.alignmentMode = ObjectSnapper.AlignmentMode.Pivot;
+            ObjectSnapper.offsetDistance = 0f;
+            ObjectSnapper.showPreview = true;
         }
 
         if (GUILayout.Button("Reset to Default"))
@@ -110,6 +194,10 @@ public class ObjectSnapperSettings : EditorWindow
             ObjectSnapper.offsetDistance = 0f;
             ObjectSnapper.useLocalSpace = false;
             ObjectSnapper.showWarnings = true;
+            ObjectSnapper.showPreview = true;
+            ObjectSnapper.snapLayerMask = ~0;
+            ObjectSnapper.alignmentMode = ObjectSnapper.AlignmentMode.Surface;
+            ObjectSnapper.enableKeyboardShortcuts = true;
         }
         EditorGUILayout.EndHorizontal();
 
@@ -121,9 +209,24 @@ public class ObjectSnapperSettings : EditorWindow
         EditorGUILayout.LabelField("How to Use", EditorStyles.boldLabel);
         EditorGUILayout.BeginVertical("box");
         EditorGUILayout.LabelField("1. Select object(s) in Scene View", EditorStyles.wordWrappedLabel);
-        EditorGUILayout.LabelField("2. Press Shift+G to activate", EditorStyles.wordWrappedLabel);
-        EditorGUILayout.LabelField("3. Click a direction button to snap", EditorStyles.wordWrappedLabel);
-        EditorGUILayout.LabelField("4. Right-click to cancel", EditorStyles.wordWrappedLabel);
+        EditorGUILayout.LabelField("2. Press Shift+G to activate snapping mode", EditorStyles.wordWrappedLabel);
+        EditorGUILayout.LabelField("3a. Click a direction button to snap", EditorStyles.wordWrappedLabel);
+        EditorGUILayout.LabelField("3b. OR use WASD/QE keys for quick snap", EditorStyles.wordWrappedLabel);
+        EditorGUILayout.LabelField("4. Hover over buttons to preview snap position", EditorStyles.wordWrappedLabel);
+        EditorGUILayout.LabelField("5. Right-click or Shift+G again to cancel", EditorStyles.wordWrappedLabel);
+        EditorGUILayout.EndVertical();
+
+        EditorGUILayout.Space(10);
+
+        // Feature highlights
+        EditorGUILayout.LabelField("Features", EditorStyles.boldLabel);
+        EditorGUILayout.BeginVertical("box");
+        EditorGUILayout.LabelField("✓ Real-time preview with gizmos", EditorStyles.wordWrappedLabel);
+        EditorGUILayout.LabelField("✓ Multiple alignment modes (Surface/Center/Pivot)", EditorStyles.wordWrappedLabel);
+        EditorGUILayout.LabelField("✓ Layer mask filtering", EditorStyles.wordWrappedLabel);
+        EditorGUILayout.LabelField("✓ Keyboard shortcuts for rapid level design", EditorStyles.wordWrappedLabel);
+        EditorGUILayout.LabelField("✓ Configurable offset for modular spacing", EditorStyles.wordWrappedLabel);
+        EditorGUILayout.LabelField("✓ Local/World space support", EditorStyles.wordWrappedLabel);
         EditorGUILayout.EndVertical();
 
         EditorGUILayout.Space(10);
