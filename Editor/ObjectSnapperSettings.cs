@@ -93,7 +93,7 @@ public class ObjectSnapperSettings : EditorWindow
         EditorGUILayout.BeginVertical("box");
 
         ObjectSnapper.enableKeyboardShortcuts = EditorGUILayout.Toggle(
-            new GUIContent("Enable Keyboard Shortcuts", "Use WASD/QE keys for quick snapping after pressing Shift+G."),
+            new GUIContent("Enable Keyboard Shortcuts", "Use Shift+WASD/QE keys for quick snapping while the menu is active."),
             ObjectSnapper.enableKeyboardShortcuts
         );
 
@@ -103,12 +103,12 @@ public class ObjectSnapperSettings : EditorWindow
             if (showKeyboardHelp)
             {
                 EditorGUILayout.BeginVertical("helpbox");
-                EditorGUILayout.LabelField("W / ↑ : Snap Forward", EditorStyles.miniLabel);
-                EditorGUILayout.LabelField("S / ↓ : Snap Backward", EditorStyles.miniLabel);
-                EditorGUILayout.LabelField("D / → : Snap Right", EditorStyles.miniLabel);
-                EditorGUILayout.LabelField("A / ← : Snap Left", EditorStyles.miniLabel);
-                EditorGUILayout.LabelField("E : Snap Up", EditorStyles.miniLabel);
-                EditorGUILayout.LabelField("Q : Snap Down", EditorStyles.miniLabel);
+                EditorGUILayout.LabelField("Shift+W / Shift+↑ : Snap Forward", EditorStyles.miniLabel);
+                EditorGUILayout.LabelField("Shift+S / Shift+↓ : Snap Backward", EditorStyles.miniLabel);
+                EditorGUILayout.LabelField("Shift+D / Shift+→ : Snap Right", EditorStyles.miniLabel);
+                EditorGUILayout.LabelField("Shift+A / Shift+← : Snap Left", EditorStyles.miniLabel);
+                EditorGUILayout.LabelField("Shift+E : Snap Up", EditorStyles.miniLabel);
+                EditorGUILayout.LabelField("Shift+Q : Snap Down", EditorStyles.miniLabel);
                 EditorGUILayout.EndVertical();
             }
         }
@@ -211,7 +211,7 @@ public class ObjectSnapperSettings : EditorWindow
         EditorGUILayout.LabelField("1. Select object(s) in Scene View", EditorStyles.wordWrappedLabel);
         EditorGUILayout.LabelField("2. Press Shift+G to activate snapping mode", EditorStyles.wordWrappedLabel);
         EditorGUILayout.LabelField("3a. Click a direction button to snap", EditorStyles.wordWrappedLabel);
-        EditorGUILayout.LabelField("3b. OR use WASD/QE keys for quick snap", EditorStyles.wordWrappedLabel);
+        EditorGUILayout.LabelField("3b. OR use Shift+WASD/QE keys for quick snap", EditorStyles.wordWrappedLabel);
         EditorGUILayout.LabelField("4. Hover over buttons to preview snap position", EditorStyles.wordWrappedLabel);
         EditorGUILayout.LabelField("5. Right-click or Shift+G again to cancel", EditorStyles.wordWrappedLabel);
         EditorGUILayout.EndVertical();
