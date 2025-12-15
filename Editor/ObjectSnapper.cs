@@ -7,12 +7,19 @@ using System.Linq;
 [InitializeOnLoad]
 public class ObjectSnapper
 {
-    static int buttonWidth = 100, buttonHeight = 50;
+    // Button dimensions (pixels)
+    static int buttonWidth = 100;
+    static int buttonHeight = 50;
 
-    static float ForwardBtnDistance = 50, BackwardBtnDistance = 50;
-    static float UpBtnDistance = 60, DownBtnDistance = 60;
-    static float RightBtnDistance = 120, LeftBtnDistance = 120;
+    // Button distances from center of radial menu (pixels)
+    static float forwardBtnDistance = 50;
+    static float backwardBtnDistance = 50;
+    static float upBtnDistance = 60;
+    static float downBtnDistance = 60;
+    static float rightBtnDistance = 120;
+    static float leftBtnDistance = 120;
 
+    // Scale multiplier when hovering over a button
     static float hoverScale = 1.2f;
 
     static Vector2 startMousePosition;
@@ -59,7 +66,7 @@ public class ObjectSnapper
             InitSkin();
 
         if(!snapping)
-            checkForInput();
+            CheckForInput();
 
         if (snapping == false && haveInput)
         {
@@ -103,55 +110,55 @@ public class ObjectSnapper
 
     static void DrawGUI()
     {
-        Rect forwardRect = new Rect(startMousePosition.x - buttonWidth * .5f, startMousePosition.y - ForwardBtnDistance - buttonHeight * .5f, buttonWidth, buttonHeight);
+        Rect forwardRect = new Rect(startMousePosition.x - buttonWidth * .5f, startMousePosition.y - forwardBtnDistance - buttonHeight * .5f, buttonWidth, buttonHeight);
         bool forwardHover = IsMouseOnRect(forwardRect);
         if(forwardHover && !hasPreview) { UpdatePreview(Directions.FORWARD); }
-        if(GUI.Button(getRectScale(forwardRect), "<color=#8D9AD9>Forward</color>", style))
+        if(GUI.Button(GetRectScale(forwardRect), "<color=#8D9AD9>Forward</color>", style))
         {
             SnapToObject(Directions.FORWARD);
             haveInput = false;
         }
 
-        Rect backwardRect = new Rect(startMousePosition.x - buttonWidth * .5f, startMousePosition.y + BackwardBtnDistance - buttonHeight * .5f, buttonWidth, buttonHeight);
+        Rect backwardRect = new Rect(startMousePosition.x - buttonWidth * .5f, startMousePosition.y + backwardBtnDistance - buttonHeight * .5f, buttonWidth, buttonHeight);
         bool backwardHover = IsMouseOnRect(backwardRect);
         if(backwardHover && !hasPreview) { UpdatePreview(Directions.BACKWARD); }
-        if(GUI.Button(getRectScale(backwardRect), "<color=#8D9AD9>Backward</color>", style))
+        if(GUI.Button(GetRectScale(backwardRect), "<color=#8D9AD9>Backward</color>", style))
         {
             SnapToObject(Directions.BACKWARD);
             haveInput = false;
         }
 
-        Rect upRect = new Rect(startMousePosition.x - buttonWidth * .5f, startMousePosition.y - ForwardBtnDistance - UpBtnDistance - buttonHeight * .5f, buttonWidth, buttonHeight);
+        Rect upRect = new Rect(startMousePosition.x - buttonWidth * .5f, startMousePosition.y - forwardBtnDistance - upBtnDistance - buttonHeight * .5f, buttonWidth, buttonHeight);
         bool upHover = IsMouseOnRect(upRect);
         if(upHover && !hasPreview) { UpdatePreview(Directions.UP); }
-        if(GUI.Button(getRectScale(upRect), "<color=#FFFF00>Top</color>", style))
+        if(GUI.Button(GetRectScale(upRect), "<color=#FFFF00>Top</color>", style))
         {
             SnapToObject(Directions.UP);
             haveInput = false;
         }
 
-        Rect downRect = new Rect(startMousePosition.x - buttonWidth * .5f, startMousePosition.y + BackwardBtnDistance + DownBtnDistance - buttonHeight * .5f, buttonWidth, buttonHeight);
+        Rect downRect = new Rect(startMousePosition.x - buttonWidth * .5f, startMousePosition.y + backwardBtnDistance + downBtnDistance - buttonHeight * .5f, buttonWidth, buttonHeight);
         bool downHover = IsMouseOnRect(downRect);
         if(downHover && !hasPreview) { UpdatePreview(Directions.DOWN); }
-        if(GUI.Button(getRectScale(downRect), "<color=#FFFF00>Down</color>", style))
+        if(GUI.Button(GetRectScale(downRect), "<color=#FFFF00>Down</color>", style))
         {
             SnapToObject(Directions.DOWN);
             haveInput = false;
         }
 
-        Rect rightRect = new Rect(startMousePosition.x + RightBtnDistance - buttonWidth * .5f, startMousePosition.y - buttonHeight * .5f, buttonWidth, buttonHeight);
+        Rect rightRect = new Rect(startMousePosition.x + rightBtnDistance - buttonWidth * .5f, startMousePosition.y - buttonHeight * .5f, buttonWidth, buttonHeight);
         bool rightHover = IsMouseOnRect(rightRect);
         if(rightHover && !hasPreview) { UpdatePreview(Directions.RIGHT); }
-        if(GUI.Button(getRectScale(rightRect), "<color=#FF0000>Right</color>", style))
+        if(GUI.Button(GetRectScale(rightRect), "<color=#FF0000>Right</color>", style))
         {
             SnapToObject(Directions.RIGHT);
             haveInput = false;
         }
 
-        Rect leftRect = new Rect(startMousePosition.x - LeftBtnDistance - buttonWidth * .5f, startMousePosition.y - buttonHeight * .5f, buttonWidth, buttonHeight);
+        Rect leftRect = new Rect(startMousePosition.x - leftBtnDistance - buttonWidth * .5f, startMousePosition.y - buttonHeight * .5f, buttonWidth, buttonHeight);
         bool leftHover = IsMouseOnRect(leftRect);
         if(leftHover && !hasPreview) { UpdatePreview(Directions.LEFT); }
-        if(GUI.Button(getRectScale(leftRect), "<color=#FF0000>Left</color>", style))
+        if(GUI.Button(GetRectScale(leftRect), "<color=#FF0000>Left</color>", style))
         {
             SnapToObject(Directions.LEFT);
             haveInput = false;
@@ -210,7 +217,7 @@ public class ObjectSnapper
         if (AssetDatabase.Contains(transform.gameObject))
             return;
 
-        Vector3 rayDirection = useLocalSpace ? transform.TransformDirection(enumToVector3(direction)) : enumToVector3(direction);
+        Vector3 rayDirection = useLocalSpace ? transform.TransformDirection(EnumToVector3(direction)) : EnumToVector3(direction);
         Vector3 rayOrigin = transform.position;
 
         if (Physics.Raycast(rayOrigin, rayDirection, out RaycastHit hit, maxRaycastDistance, snapLayerMask))
@@ -313,8 +320,8 @@ public class ObjectSnapper
 
         //var y1 = t1.position.y;
         //var y2 = t2.position.y;
-        var y1 = getPositionFromCorrectDirection(t1.position);
-        var y2 = getPositionFromCorrectDirection(t2.position);
+        var y1 = GetPositionFromCorrectDirection(t1.position);
+        var y2 = GetPositionFromCorrectDirection(t2.position);
 
         return y1.CompareTo(y2);
     }
@@ -325,7 +332,7 @@ public class ObjectSnapper
         return result;
     }
 
-    static float getPositionFromCorrectDirection(Vector3 pos)
+    static float GetPositionFromCorrectDirection(Vector3 pos)
     {
         float result = 0;
         switch(currentDirection)
@@ -353,7 +360,7 @@ public class ObjectSnapper
         return result;
     }
 
-    static void checkForInput()
+    static void CheckForInput()
     {
         if(Event.current.isKey && Event.current.shift && Event.current.type == EventType.KeyDown)
         {
@@ -368,6 +375,7 @@ public class ObjectSnapper
                 {
                     ClearPreview();
                 }
+                Event.current.Use();
             }
 
             // Direct keyboard shortcuts
@@ -433,7 +441,7 @@ public class ObjectSnapper
         noSkin = false;
     }
 
-    static Rect getRectScale(Rect r)
+    static Rect GetRectScale(Rect r)
     {
         if(IsMouseOnRect(r))
             r = new Rect(r.x - (r.width * hoverScale - r.width) * .5f, r.y - (r.height * hoverScale - r.height) * .5f, r.width * hoverScale, r.height * hoverScale);
@@ -456,7 +464,7 @@ public class ObjectSnapper
         return false;
     }
 
-    static Vector3 enumToVector3(Directions direction)
+    static Vector3 EnumToVector3(Directions direction)
     {
         Vector3 result = Vector3.zero;
         switch (direction)
@@ -501,7 +509,7 @@ public class ObjectSnapper
             if (AssetDatabase.Contains(t.gameObject))
                 continue;
 
-            Vector3 rayDirection = useLocalSpace ? t.TransformDirection(enumToVector3(direction)) : enumToVector3(direction);
+            Vector3 rayDirection = useLocalSpace ? t.TransformDirection(EnumToVector3(direction)) : EnumToVector3(direction);
             Vector3 rayOrigin = t.position;
 
             if (Physics.Raycast(rayOrigin, rayDirection, out RaycastHit hit, maxRaycastDistance, snapLayerMask))
