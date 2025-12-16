@@ -5,6 +5,22 @@ A Unity Editor tool that provides a radial snap menu for quickly snapping select
 ![Unity](https://img.shields.io/badge/Unity-2020.3%2B-blue)
 ![License](https://img.shields.io/badge/License-MIT-green)
 
+## The Problem
+
+In Unity, precise object placement is tedious and imprecise:
+- **Snapping walls to walls** requires manual dragging with imprecise gizmo control
+- **Aligning props to surfaces** involves trial-and-error positioning
+- **Placing multiple objects** perfectly takes significant time with no guarantee of accuracy
+- Unity's default movement tools lack the precision and speed needed for level design workflows
+
+## The Solution
+
+**Object Snapper** eliminates this friction. Simply select your objects, press `Shift+G`, and snap them to surfaces in any of 6 directions with pixel-perfect precision. Real-time preview shows exactly where objects will land before you confirm. What used to take manual adjustments now happens in milliseconds.
+
+## Demo
+
+<img src="./docs/demo.gif" width="700" alt="Object Snapper Demo">
+
 ## Features
 
 - **Radial Snap Menu** - Intuitive radial interface activated with `Shift+G`
