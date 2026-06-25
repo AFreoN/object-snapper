@@ -1,7 +1,7 @@
 {
   "name": "com.afreon.objectsnapper",
   "displayName": "Object Snapper",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "A Unity Editor tool that provides a radial snap menu for quickly snapping selected objects to surfaces in 6 directions.",
   "unity": "2020.3",
   "keywords": [

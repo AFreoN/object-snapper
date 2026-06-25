@@ -1,6 +1,8 @@
 using UnityEngine;
 using UnityEditor;
 
+namespace ObjectSnapperTool
+{
 public class ObjectSnapperSettings : EditorWindow
 {
     [MenuItem("Tools/Object Snapper Settings")]
@@ -233,4 +235,5 @@ public class ObjectSnapperSettings : EditorWindow
 
         EditorGUILayout.EndScrollView();
     }
+}
 }

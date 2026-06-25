@@ -1,9 +1,9 @@
 using UnityEngine;
 using UnityEditor;
 using System.Collections.Generic;
-using System.Collections;
-using System.Linq;
 
+namespace ObjectSnapperTool
+{
 [InitializeOnLoad]
 public class ObjectSnapper
 {
@@ -56,8 +56,6 @@ public class ObjectSnapper
     static ObjectSnapper()
     {
         SceneView.duringSceneGui += OnSceneGUI;
-
-        //style = new GUIStyle(GUI.skin.button);
     }
 
     static void OnSceneGUI(SceneView sceneView)
@@ -218,18 +216,9 @@ public class ObjectSnapper
             return;
 
         Vector3 rayDirection = useLocalSpace ? transform.TransformDirection(EnumToVector3(direction)) : EnumToVector3(direction);
-        Vector3 rayOrigin = transform.position;
 
-        if (Physics.Raycast(rayOrigin, rayDirection, out RaycastHit hit, maxRaycastDistance, snapLayerMask))
+        if (TryGetSnapHit(transform, rayDirection, out RaycastHit hit))
         {
-            // Check if hit object has a collider (redundant but good for clarity)
-            if (hit.collider == null && showWarnings)
-            {
-                Debug.LogWarning($"ObjectSnapper: No collider found on target object for {transform.name}");
-                lastTime = Time.realtimeSinceStartup;
-                return;
-            }
-
             Undo.RecordObject(transform, "Snap Object");
 
             Vector3 targetPosition = CalculateSnapPosition(transform, hit, rayDirection, direction);
@@ -243,74 +232,108 @@ public class ObjectSnapper
         lastTime = Time.realtimeSinceStartup;
     }
 
+    // Raycasts from the object's pivot, ignoring any colliders belonging to the object
+    // itself (or its children) so it never snaps to its own geometry.
+    static bool TryGetSnapHit(Transform transform, Vector3 rayDirection, out RaycastHit closestHit)
+    {
+        RaycastHit[] hits = Physics.RaycastAll(transform.position, rayDirection, maxRaycastDistance, snapLayerMask);
+
+        closestHit = default;
+        float closestDistance = float.MaxValue;
+        bool found = false;
+
+        foreach (RaycastHit hit in hits)
+        {
+            // Skip colliders that are part of the object being snapped.
+            if (hit.collider.transform.IsChildOf(transform) || transform.IsChildOf(hit.collider.transform))
+                continue;
+
+            if (hit.distance < closestDistance)
+            {
+                closestDistance = hit.distance;
+                closestHit = hit;
+                found = true;
+            }
+        }
+
+        return found;
+    }
+
     static Vector3 CalculateSnapPosition(Transform transform, RaycastHit hit, Vector3 rayDirection, Directions direction)
     {
+        Vector3 dir = rayDirection.normalized;
         Vector3 targetPosition = transform.position;
 
         switch (alignmentMode)
         {
             case AlignmentMode.Surface:
-                Vector3 directionalized = MultiplyVector3Segments(-1 * rayDirection.normalized, transform.position);
-                directionalized.x = rayDirection.x == 0 ? transform.position.x : hit.point.x + GetExtremeDistance(transform, direction) + (offsetDistance * Mathf.Sign(rayDirection.x));
-                directionalized.y = rayDirection.y == 0 ? transform.position.y : hit.point.y + GetExtremeDistance(transform, direction) + (offsetDistance * Mathf.Sign(rayDirection.y));
-                directionalized.z = rayDirection.z == 0 ? transform.position.z : hit.point.z + GetExtremeDistance(transform, direction) + (offsetDistance * Mathf.Sign(rayDirection.z));
-                targetPosition = directionalized;
+                // Distance from the object's pivot to its surface, measured along the ray
+                // direction. Projecting the world-space bounds onto the ray handles both
+                // axis-aligned and rotated objects correctly.
+                float surfaceExtent = GetExtentAlongDirection(transform, dir);
+
+                // Place the object so its leading surface rests on the hit point, then push
+                // back along the ray by the requested offset (positive = gap, negative = overlap).
+                targetPosition = hit.point - (dir * surfaceExtent) - (dir * offsetDistance);
                 break;
 
             case AlignmentMode.Center:
-                Renderer hitRenderer = hit.collider.GetComponent<Renderer>();
-                if (hitRenderer != null)
-                {
-                    Vector3 hitCenter = hitRenderer.bounds.center;
-                    targetPosition = hitCenter + (rayDirection.normalized * offsetDistance);
-                }
+                Bounds hitBounds;
+                if (TryGetWorldBounds(hit.collider.transform, out hitBounds))
+                    targetPosition = hitBounds.center + (dir * offsetDistance);
                 else
-                {
-                    targetPosition = hit.point + (rayDirection.normalized * offsetDistance);
-                }
+                    targetPosition = hit.point + (dir * offsetDistance);
                 break;
 
             case AlignmentMode.Pivot:
-                targetPosition = hit.transform.position + (rayDirection.normalized * offsetDistance);
+                // hit.collider may belong to a child; align to the root object's pivot.
+                targetPosition = hit.collider.transform.root.position + (dir * offsetDistance);
                 break;
         }
 
         return targetPosition;
     }
 
-    static float GetExtremeDistance(Transform transform, Directions direction)
+    // Returns how far the object's surface extends from its pivot along the given world
+    // direction. Falls back from Renderer bounds to Collider bounds, then to zero.
+    static float GetExtentAlongDirection(Transform transform, Vector3 worldDir)
+    {
+        if (!TryGetWorldBounds(transform, out Bounds bounds))
+            return 0f;
+
+        Vector3 dir = worldDir.normalized;
+        Vector3 extents = bounds.extents;
+
+        // Projection of an axis-aligned box's half-extents onto an arbitrary direction.
+        float projected = Mathf.Abs(dir.x) * extents.x
+                        + Mathf.Abs(dir.y) * extents.y
+                        + Mathf.Abs(dir.z) * extents.z;
+
+        // Account for the pivot not being at the bounds center (offset pivots).
+        float pivotOffset = Vector3.Dot(bounds.center - transform.position, dir);
+
+        return projected + pivotOffset;
+    }
+
+    // Resolves world-space bounds for an object, preferring Renderer, then Collider.
+    static bool TryGetWorldBounds(Transform transform, out Bounds bounds)
     {
         Renderer renderer = transform.GetComponent<Renderer>();
-
-        if (renderer == null)
-            return 0;
-
-        Bounds bounds = renderer.bounds;
-        float result = 0;
-
-        switch(direction)
+        if (renderer != null)
         {
-            case Directions.UP:
-                result = transform.position.y - bounds.max.y;
-                break;
-            case Directions.DOWN:
-                result = transform.position.y - bounds.min.y;
-                break;
-            case Directions.RIGHT:
-                result = transform.position.x - bounds.max.x;
-                break;
-            case Directions.LEFT:
-                result = transform.position.x - bounds.min.x;
-                break;
-            case Directions.FORWARD:
-                result = transform.position.z - bounds.max.z;
-                break;
-            case Directions.BACKWARD:
-                result = transform.position.z - bounds.min.z;
-                break;
+            bounds = renderer.bounds;
+            return true;
         }
 
-        return result;
+        Collider collider = transform.GetComponent<Collider>();
+        if (collider != null)
+        {
+            bounds = collider.bounds;
+            return true;
+        }
+
+        bounds = default;
+        return false;
     }
 
     static int YPosComp(Transform t1, Transform t2)
@@ -324,12 +347,6 @@ public class ObjectSnapper
         var y2 = GetPositionFromCorrectDirection(t2.position);
 
         return y1.CompareTo(y2);
-    }
-
-    static Vector3 MultiplyVector3Segments(Vector3 v1, Vector3 v2)
-    {
-        Vector3 result = new Vector3(v1.x * v2.x, v1.y * v2.y, v1.z * v2.z);
-        return result;
     }
 
     static float GetPositionFromCorrectDirection(Vector3 pos)
@@ -510,9 +527,8 @@ public class ObjectSnapper
                 continue;
 
             Vector3 rayDirection = useLocalSpace ? t.TransformDirection(EnumToVector3(direction)) : EnumToVector3(direction);
-            Vector3 rayOrigin = t.position;
 
-            if (Physics.Raycast(rayOrigin, rayDirection, out RaycastHit hit, maxRaycastDistance, snapLayerMask))
+            if (TryGetSnapHit(t, rayDirection, out RaycastHit hit))
             {
                 Vector3 previewPos = CalculateSnapPosition(t, hit, rayDirection, direction);
                 previewPositions[t] = previewPos;
@@ -538,10 +554,8 @@ public class ObjectSnapper
             if (t == null)
                 continue;
 
-            Renderer renderer = t.GetComponent<Renderer>();
-            if (renderer != null)
+            if (TryGetWorldBounds(t, out Bounds bounds))
             {
-                Bounds bounds = renderer.bounds;
                 Vector3 size = bounds.size;
                 Vector3 offset = previewPos - t.position;
                 Vector3 previewCenter = bounds.center + offset;
@@ -595,4 +609,5 @@ public class ObjectSnapper
         Center,
         Pivot
     }
+}
 }

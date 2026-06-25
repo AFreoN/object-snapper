@@ -27,9 +27,12 @@ In Unity, precise object placement is tedious and imprecise:
 - **6-Direction Snapping** - Snap objects Forward, Backward, Up, Down, Left, or Right
 - **Real-time Preview** - See wireframe gizmos showing where objects will snap before confirming
 - **Multiple Alignment Modes**:
-  - **Surface** - Align object surface to hit point (default)
+  - **Surface** - Rest the object's surface on the hit point (default)
   - **Center** - Align to target object's center
   - **Pivot** - Align to target object's pivot point
+- **Rotation-Aware Snapping** - Surface alignment projects the object's bounds onto the snap direction, so rotated and off-center-pivot objects land flush instead of leaving gaps
+- **Self-Hit Safe** - Objects never snap to their own colliders (or those of their children)
+- **Renderer or Collider Bounds** - Works with objects that have a Collider but no Renderer
 - **Layer Mask Filtering** - Control which layers can be snapped to
 - **Keyboard Shortcuts** - Use Shift+WASD/QE keys for rapid snapping
 - **Local/World Space** - Snap in world space or object's local space
@@ -105,7 +108,8 @@ The settings window includes preset buttons for common configurations:
 ## Requirements
 
 - Unity 2020.3 or later
-- Objects must have Colliders for raycasting to work
+- **Target objects** must have Colliders for the raycast to detect them
+- **Snapped objects** should have a Renderer or Collider so their surface bounds can be measured (objects with neither snap to their pivot)
 
 ## License
 
